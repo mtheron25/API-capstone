@@ -1,0 +1,23 @@
+GET http://localhost:2013/posts
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiTWFuaWNpYSIsImlhdCI6MTY0NzI0OTgzNH0.9EpA2OZzk2pC263JsN4urE_WD4Exhow7HZOAdgu05xg
+
+###
+
+POST http://localhost:2013/user/register
+Content-Type: application/json
+
+{
+    "username": "manicia",
+    "email": "manicia@gmail.com",
+    "password": "password"
+}
+
+###
+
+POST http://localhost:2013/login 
+Content-Type: application/json
+
+{
+    "email": "manicia@gmail.com",
+    "password": "password"
+}
