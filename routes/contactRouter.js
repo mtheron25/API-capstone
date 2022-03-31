@@ -1,13 +1,14 @@
 const express = require("express");
+const app = express.Router();
 const nodemailer = require("nodemailer");
-const router = express.Router();
 require("dotenv").config();
 
-router.get("/", (req, res) =>
-  res.send({ msg: "Send contact using POST" })
-);
-router.post("/", (req, res) => {
-  const { name, email, message } = req.body;
+app.get("/", (req, res) => {
+  res.send({ msg: "SEND CONTACT USING POST" });
+});
+
+app.post("/", (req, res) => {
+  const { name, email, message, subject } = req.body;
   var transporter = nodemailer.createTransport({
     service: "gmail",
     host: "smtp.gmail.com",
@@ -21,22 +22,24 @@ router.post("/", (req, res) => {
 
   var mailOptions = {
     from: email,
-    to: "theronmanicia27@gmail.com",
-    subject: "New message from Hotel-client",
-    text: `${(name, surname)} has messaged you, saying:
-    
-    ${message}<br> ${contact}`,
+    to: "maniciatheron25@gmail.com",
+    subject: `${subject}`,
+    text: `Name: ${name}
+Email: ${email}
+Contacted You With The Below Message
+    ${message}
+              `,
   };
 
   transporter.sendMail(mailOptions, function (error, info) {
     if (error) {
       console.log(error);
-      res.status(400).send({ msg: "Email not sent!" + error });
+      res.status(400).send({ msg: "Email could not be sent" + error });
     } else {
       console.log("Email sent: " + info.response);
-      res.send({ msg: "Message sent successfully!" });
+      res.send({ msg: "Message sent succesfully" });
     }
   });
 });
 
-module.exports = router;
+module.exports = app;

@@ -1,109 +1,144 @@
-require("dotenv").config();
+require("dotenv").config;
 const express = require("express");
-const router = express.Router();
-const con = require("../dbConnection");
+const Clients = require("../models/clients");
+const authenticateToken = require("../middleware/auth");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const { getClient, getRoom } = require("../middleware/finders");
+const app = express.Router();
 
-//REGISTER CLIENT
-router.post("/", async (req, res) => {
-  const { name, email, contact, password } = req.body;
-  if (!name || !email || !contact || !password) {
-    res.status(400).send({ msg: "Not all fields have been submitted" });
-  }
+// GET all users
+app.get("/", async (req, res) => {
   try {
-    const salt = await bcrypt.genSalt();
-    const hashedPassword = await bcrypt.hash(password, salt);
-    var sql = `INSERT INTO clients (client_name, client_email, client_contact, client_password) VALUES ('${name}', '${email}', '${contact}','${hashedPassword}')`;
-    con.query(sql, function (err, result) {
-      if (err) throw err;
-      console.log("1 record inserted");
-      res.send("User created");
+    const clients = await Clients.find();
+    res.status(200).json({
+      message: "SUCCESS",
+      results: clients,
     });
   } catch (error) {
-    res.status(500).send();
+    res.status(500).send({
+      message: error.message,
+    });
   }
 });
 
-//GET ALL CLIENTS
-router.get("/", (req, res) => {
-  var sql = `SELECT * FROM clients`;
-  con.query(sql, function (err, result) {
-    if (err) throw err;
-    // console.log("1 record inserted");
-    res.send(result);
-  });
+// GET one client
+app.get("/single-client/", authenticateToken, async (req, res, next) => {
+  try {
+    const client = await Clients.findById(req.client._id);
+    res.status(201).json(client);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 });
 
-//GET 1 (ID)
-router.get("/:id", (req, res, next) => {
-  var sql = `SELECT * FROM clients WHERE client_id=${req.params.id}`;
-  con.query(sql, function (err, result) {
-    if (err) throw err;
-    console.log("1 record inserted");
-    res.send(result[0]);
-  });
-});
-
-// SIGN IN CLIENT
-
-router.patch("/", (req, res) => {
+// LOGIN client with email + password
+app.patch("/", async (req, res, next) => {
   const { email, password } = req.body;
-  var sql = `SELECT * FROM clients WHERE client_email='${email}'`;
-  con
-    .query(sql, async function (err, result) {
-      const user = result[0];
-      const match = await bcrypt.compare(password, result[0].user_password);
-      if (match) {
-        console.log(user);
-        try {
-          const access_token = jwt.sign(
-            JSON.stringify(result[0]),
-            process.env.ACCESS_TOKEN_SECRET
-          );
-          res.json({ jwt: access_token });
-        } catch (error) {
-          console.log(error);
-        }
-      } else {
-        res.send("email and password does not match");
-      }
-    })
-    .on("error", () => {
-      res.send("Could not fetch from databse");
+  const client = await Clients.findOne({
+    email,
+  });
+
+  if (!client)
+    res.status(404).json({
+      message: "Could not find client",
     });
+  if (await bcrypt.compare(password, client.password)) {
+    try {
+      const access_token = jwt.sign(
+        JSON.stringify(client),
+        process.env.ACCESS_TOKEN_SECRET
+      );
+      res.status(201).json({
+        jwt: access_token,
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: error.message,
+      });
+    }
+  } else {
+    res.status(400).json({
+      message: "Email and password combination do not match",
+    });
+  }
 });
 
-// UPDATE CLIENT WITH ID
-router.put("/:id", (req, res) => {
-  const { name, email, contact, password } = req.body;
+// REGISTER a client
+app.post("/", async (req, res, next) => {
+  const { name, email, password, contact } = req.body;
 
-  let sql = `UPDATE clients SET `;
+  const salt = await bcrypt.genSalt();
+  const hashedPassword = await bcrypt.hash(password, salt);
 
-  if (name) sql += `client_name='${name}',`;
-  if (email) sql = +`client_email='${email}',`;
-  if (contact) sql = +`client_contact='${contact}',`;
-  if (password) sql = +`client_password='${password}',`;
-
-  if (sql.endsWith(",")) sql = sql.substring(0, sql.length - 1);
-
-  sql = +` WHERE client_id=${req.params.id}`;
-
-  con.query(sql, function (err, result) {
-    if (err) throw err;
-    console.log("1 record updated");
-    res.send(result);
+  const client = new Clients({
+    name,
+    email,
+    password: hashedPassword,
+    contact,
   });
+
+  try {
+    const newClient = await client.save();
+
+    try {
+      const access_token = jwt.sign(
+        JSON.stringify(newClient),
+        process.env.ACCESS_TOKEN_SECRET
+      );
+      res.status(201).json({
+        jwt: access_token,
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: error.message,
+      });
+    }
+  } catch (error) {
+    res.status(400).json({
+      message: error.message,
+    });
+  }
 });
 
-//DELETE CLIENT WITH ID
-router.delete("/:id", (req, res) => {
-  var sql = `DELETE FROM clients WHERE client_id=${req.params.id}`;
-  con.query(sql, function (err, result) {
-    if (err) throw err;
-    console.log("1 record deleted");
-    res.send(result[0]);
-  });
+// UPDATE a client
+app.put("/", authenticateToken, async (req, res, next) => {
+  const client = await Cleints.findById(req.client._id);
+  const { name, email, password } = req.body;
+  if (name) client.name = name;
+  if (email) client.email = email;
+  if (password) {
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(password, salt);
+    client.password = hashedPassword;
+  }
+  try {
+    const updatedClient = await client.save();
+
+    try {
+      const token = jwt.sign(
+        JSON.stringify(updatedClient),
+        process.env.ACCESS_TOKEN_SECRET
+      );
+      res.status(201).json({ jwt: token, client: updatedClient });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+    // Dont just send client as object, create a JWT and send that too.
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
 });
 
-module.exports = router;
+// DELETE a client
+app.delete("/:id", getClient, async (req, res, next) => {
+  try {
+    const client = await Clients.findById(req.client._id);
+    await client.remove();
+    res.json({ message: "Client deleted" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+module.exports = app;
